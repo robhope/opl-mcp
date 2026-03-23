@@ -100,16 +100,19 @@ if (useHttp) {
         legacyHeaders: false,
     }));
 
-    // CORS — claude.ai makes cross-origin requests to this endpoint
-    app.use("/mcp", (req, res, next) => {
-        res.setHeader("Access-Control-Allow-Origin", "https://claude.ai");
+    // CORS — allow any origin (public read-only API)
+    app.use((req, res, next) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-        res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, Authorization");
         if (req.method === "OPTIONS") { res.sendStatus(204); return; }
         next();
     });
 
-    // Health check for proxy probes
+    // Root + health check
+    app.get("/", (_req, res) => {
+        res.json({ service: "opl-mcp", version: "1.1.0", endpoint: "/mcp" });
+    });
     app.get("/health", (_req, res) => {
         res.json({ status: "ok", service: "opl-mcp", version: "1.1.0" });
     });
