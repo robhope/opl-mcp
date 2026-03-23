@@ -21,6 +21,14 @@ async function searchOPL(query, index) {
     return response.json();
 }
 
+function toDirectUrl(screenshotUrl) {
+    // Convert cdn-cgi transform URL back to plain WordPress upload URL
+    // e.g. https://assets.onepagelove.com/cdn-cgi/image/.../wp-content/uploads/...jpg
+    //   -> https://onepagelove.com/wp-content/uploads/...jpg
+    const match = screenshotUrl && screenshotUrl.match(/\/wp-content\/uploads\/.+/);
+    return match ? `https://onepagelove.com${match[0]}` : screenshotUrl;
+}
+
 function formatResults(data) {
     if (!data.results || data.results.length === 0) {
         return [{ type: "text", text: "No results found. Try a different search term." }];
@@ -29,11 +37,12 @@ function formatResults(data) {
     const content = [];
 
     data.results.forEach((result, i) => {
+        const imgUrl = result.screenshot_url ? toDirectUrl(result.screenshot_url) : null;
         const lines = [
+            imgUrl ? `![${result.title}](${imgUrl})` : "",
             `**[${result.title}](${result.url})**`,
             result.description || "",
             `${result.date ? `${result.date}` : ""}${result.category ? ` · ${result.category}` : ""}`,
-            result.screenshot_url ? `[View screenshot](${result.screenshot_url})` : "",
         ].filter(Boolean).join("\n");
         content.push({ type: "text", text: lines });
     });
