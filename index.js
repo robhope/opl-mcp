@@ -52,22 +52,22 @@ function createServer() {
 
     server.tool(
         "search_inspiration",
-        "Search curated real one-page websites and landing pages for design inspiration. Returns recent examples with screenshots.",
-        { query: z.string().describe("What to search for. Examples: 'dark portfolio', 'SaaS landing page', 'minimal', 'photography'") },
+        "Search curated real one-page websites and landing pages by overall design style, industry, or company type. Use for queries about complete page designs — e.g. 'dark SaaS landing page', 'minimal portfolio', 'fintech startup'. Do NOT use for specific page sections (hero, pricing, nav etc.) — use search_sections for those.",
+        { query: z.string().describe("What to search for. Include style descriptors in the query for better results. Examples: 'dark SaaS landing page', 'minimal portfolio', 'fintech', 'photography'") },
         async ({ query }) => ({ content: formatResults(await searchOPL(query, "inspiration")) })
     );
 
     server.tool(
         "search_templates",
-        "Search downloadable one-page website templates. Includes Framer, Webflow, HTML, Squarespace and more.",
+        "Search downloadable one-page website templates. Includes Framer, Webflow, HTML, Squarespace and more. Use when the user wants a template they can download or clone.",
         { query: z.string().describe("What to search for. Examples: 'Framer portfolio', 'free landing page', 'dark HTML template'") },
         async ({ query }) => ({ content: formatResults(await searchOPL(query, "templates")) })
     );
 
     server.tool(
         "search_sections",
-        "Search page section design examples — real websites using specific section types. Use this for hero sections, pricing tables, CTAs, navigation, testimonials, footers, contact forms etc.",
-        { query: z.string().describe("Section type to search for. Examples: 'pricing', 'hero', 'CTA', 'sticky nav', 'testimonials', 'footer'") },
+        "Search real-world examples of specific page sections and UI components. ALWAYS use this tool when the query mentions a section type: hero, pricing, pricing table, CTA, call to action, navigation, sticky nav, testimonials, footer, contact form, features, about, FAQ, team. Include style descriptors in the query (e.g. 'dark pricing table', 'minimal hero section').",
+        { query: z.string().describe("Section type plus any style descriptors. Examples: 'dark pricing table', 'minimal hero', 'sticky nav', 'testimonials with avatars', 'animated CTA'") },
         async ({ query }) => ({ content: formatResults(await searchOPL(query, "sections")) })
     );
 
