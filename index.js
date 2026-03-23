@@ -89,6 +89,7 @@ if (useHttp) {
     const { rateLimit } = await import("express-rate-limit");
 
     const app = express();
+    app.set("trust proxy", 1); // trust nginx-proxy's X-Forwarded-For
     app.use(express.json());
 
     // Rate limit: 60 requests/minute per IP
