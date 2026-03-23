@@ -1,0 +1,19 @@
+{
+  "name": "opl-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for One Page Love — search 9,000+ curated one-page websites, templates, sections and typefaces",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "opl-mcp": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["mcp", "onepagelove", "design", "inspiration", "templates"],
+  "author": "Rob Hope <rob@onepagelove.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
