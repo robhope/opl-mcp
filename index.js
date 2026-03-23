@@ -5,44 +5,73 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
-const API_BASE = "https://onepagelove.com/wp-json/opl/v1/search";
+const ALGOLIA_APP_ID  = "MZD9L5GHEU";
+const ALGOLIA_API_KEY = "8b38cb1b451ae9b2c874bbfa9e3a451c";
+const ALGOLIA_BASE    = `https://${ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes`;
 const PORT = process.env.PORT || 3000;
+const HITS = 5;
 
 async function searchOPL(query, index) {
-    const url = new URL(API_BASE);
-    url.searchParams.set("q", query);
-    url.searchParams.set("index", index);
-    url.searchParams.set("source", "claude");
+    const res = await fetch(`${ALGOLIA_BASE}/${index}/query`, {
+        method: "POST",
+        headers: {
+            "X-Algolia-Application-Id": ALGOLIA_APP_ID,
+            "X-Algolia-API-Key": ALGOLIA_API_KEY,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            query,
+            hitsPerPage: HITS,
+            attributesToRetrieve: ["title", "description", "url", "category", "date", "screenshot_url"],
+            analyticsTags: ["claude"],
+        }),
+    });
+    if (!res.ok) throw new Error(`Algolia error: ${res.status}`);
+    const data = await res.json();
+    // Normalise to same shape as WP endpoint
+    return { results: (data.hits || []).map(h => ({
+        title: h.title,
+        description: h.description,
+        url: h.url,
+        category: h.category,
+        date: h.date,
+        screenshot_url: h.screenshot_url,
+    })) };
+}
 
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-        throw new Error(`OPL API error: ${response.status}`);
+async function fetchImageBase64(url) {
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) return null;
+        const buf = await res.arrayBuffer();
+        return Buffer.from(buf).toString("base64");
+    } catch {
+        return null;
     }
-    return response.json();
 }
 
-function toDirectUrl(screenshotUrl) {
-    // Convert cdn-cgi transform URL back to plain WordPress upload URL
-    // e.g. https://assets.onepagelove.com/cdn-cgi/image/.../wp-content/uploads/...jpg
-    //   -> https://onepagelove.com/wp-content/uploads/...jpg
-    const match = screenshotUrl && screenshotUrl.match(/\/wp-content\/uploads\/.+/);
-    return match ? `https://onepagelove.com${match[0]}` : screenshotUrl;
-}
-
-function formatResults(data) {
+async function formatResults(data) {
     if (!data.results || data.results.length === 0) {
         return [{ type: "text", text: "No results found. Try a different search term." }];
     }
 
-    const content = [];
+    // Fetch all screenshots in parallel (3s timeout each)
+    const images = await Promise.all(
+        data.results.map(r => r.screenshot_url ? fetchImageBase64(r.screenshot_url) : Promise.resolve(null))
+    );
 
+    const content = [];
     data.results.forEach((result, i) => {
-        const imgUrl = result.screenshot_url ? toDirectUrl(result.screenshot_url) : null;
+        if (images[i]) {
+            content.push({ type: "image", data: images[i], mimeType: "image/jpeg" });
+        }
         const lines = [
-            imgUrl ? `![${result.title}](${imgUrl})` : "",
             `**[${result.title}](${result.url})**`,
             result.description || "",
-            `${result.date ? `${result.date}` : ""}${result.category ? ` · ${result.category}` : ""}`,
+            `${result.date ? result.date : ""}${result.category ? ` · ${result.category}` : ""}`,
         ].filter(Boolean).join("\n");
         content.push({ type: "text", text: lines });
     });
@@ -53,7 +82,7 @@ function formatResults(data) {
 function createServer() {
     const server = new McpServer({
         name: "One Page Love",
-        version: "1.1.0",
+        version: "1.2.0",
         description: "Search 9,000+ curated one-page websites, landing page templates, page section examples and typeface references on One Page Love (onepagelove.com). All results are human-curated by Rob Hope since 2008.",
     });
 
@@ -61,28 +90,28 @@ function createServer() {
         "search_inspiration",
         "Search curated real one-page websites and landing pages by overall design style, industry, or company type. Use for queries about complete page designs — e.g. 'dark SaaS landing page', 'minimal portfolio', 'fintech startup'. Do NOT use for specific page sections (hero, pricing, nav etc.) — use search_sections for those.",
         { query: z.string().describe("What to search for. Include style descriptors in the query for better results. Examples: 'dark SaaS landing page', 'minimal portfolio', 'fintech', 'photography'") },
-        async ({ query }) => ({ content: formatResults(await searchOPL(query, "inspiration")) })
+        async ({ query }) => ({ content: await formatResults(await searchOPL(query, "inspiration")) })
     );
 
     server.tool(
         "search_templates",
         "Search downloadable one-page website templates. Includes Framer, Webflow, HTML, Squarespace and more. Use when the user wants a template they can download or clone.",
         { query: z.string().describe("What to search for. Examples: 'Framer portfolio', 'free landing page', 'dark HTML template'") },
-        async ({ query }) => ({ content: formatResults(await searchOPL(query, "templates")) })
+        async ({ query }) => ({ content: await formatResults(await searchOPL(query, "templates")) })
     );
 
     server.tool(
         "search_sections",
         "Search real-world examples of specific page sections and UI components. ALWAYS use this tool when the query mentions a section type: hero, pricing, pricing table, CTA, call to action, navigation, sticky nav, testimonials, footer, contact form, features, about, FAQ, team. Include style descriptors in the query (e.g. 'dark pricing table', 'minimal hero section').",
         { query: z.string().describe("Section type plus any style descriptors. Examples: 'dark pricing table', 'minimal hero', 'sticky nav', 'testimonials with avatars', 'animated CTA'") },
-        async ({ query }) => ({ content: formatResults(await searchOPL(query, "sections")) })
+        async ({ query }) => ({ content: await formatResults(await searchOPL(query, "sections")) })
     );
 
     server.tool(
         "search_typefaces",
         "Search for websites using a specific typeface/font. Returns real examples of the font in use on one-page websites.",
         { query: z.string().describe("Font name to search for. Examples: 'Satoshi', 'Haffer', 'Romie', 'Geist'") },
-        async ({ query }) => ({ content: formatResults(await searchOPL(query, "typeface")) })
+        async ({ query }) => ({ content: await formatResults(await searchOPL(query, "typeface")) })
     );
 
     return server;
@@ -91,15 +120,13 @@ function createServer() {
 const useHttp = process.argv.includes("--http") || process.env.MCP_TRANSPORT === "http";
 
 if (useHttp) {
-    // Lazy import express only in HTTP mode
     const { default: express } = await import("express");
     const { rateLimit } = await import("express-rate-limit");
 
     const app = express();
-    app.set("trust proxy", 1); // trust nginx-proxy's X-Forwarded-For
+    app.set("trust proxy", 1);
     app.use(express.json());
 
-    // Rate limit: 60 requests/minute per IP
     app.use("/mcp", rateLimit({
         windowMs: 60 * 1000,
         max: 60,
@@ -107,7 +134,6 @@ if (useHttp) {
         legacyHeaders: false,
     }));
 
-    // CORS — allow any origin (public read-only API)
     app.use((req, res, next) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
@@ -116,32 +142,20 @@ if (useHttp) {
         next();
     });
 
-    // Root + health check
-    app.get("/", (_req, res) => {
-        res.json({ service: "opl-mcp", version: "1.1.0", endpoint: "/mcp" });
-    });
-    app.get("/health", (_req, res) => {
-        res.json({ status: "ok", service: "opl-mcp", version: "1.1.0" });
-    });
+    app.get("/", (_req, res) => res.json({ service: "opl-mcp", version: "1.2.0", endpoint: "/mcp" }));
+    app.get("/health", (_req, res) => res.json({ status: "ok", service: "opl-mcp", version: "1.2.0" }));
 
-    // MCP endpoint — stateless, new transport + server per request
     app.all("/mcp", async (req, res) => {
-        const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: undefined, // stateless mode
-        });
+        const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         const server = createServer();
         res.on("close", () => transport.close().catch(() => {}));
         await server.connect(transport);
         await transport.handleRequest(req, res, req.body);
     });
 
-    app.listen(PORT, "0.0.0.0", () => {
-        console.log(`opl-mcp HTTP server listening on port ${PORT}`);
-    });
+    app.listen(PORT, "0.0.0.0", () => console.log(`opl-mcp HTTP server listening on port ${PORT}`));
 
 } else {
-    // stdio mode — unchanged, used by Claude Desktop via npx
     const server = createServer();
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+    await server.connect(new StdioServerTransport());
 }
