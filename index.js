@@ -21,35 +21,19 @@ async function searchOPL(query, index) {
     return response.json();
 }
 
-async function formatResults(data) {
+function formatResults(data) {
     if (!data.results || data.results.length === 0) {
         return [{ type: "text", text: "No results found. Try a different search term." }];
     }
 
-    // Fetch all screenshots in parallel
-    const images = await Promise.all(data.results.map(async (result) => {
-        if (!result.screenshot_url) return null;
-        try {
-            const res = await fetch(result.screenshot_url);
-            if (!res.ok) return null;
-            const buf = await res.arrayBuffer();
-            return Buffer.from(buf).toString("base64");
-        } catch {
-            return null;
-        }
-    }));
-
     const content = [];
 
     data.results.forEach((result, i) => {
-        if (images[i]) {
-            content.push({ type: "image", data: images[i], mimeType: "image/jpeg" });
-        }
         const lines = [
-            `**${i + 1}. ${result.title}**`,
+            `**[${result.title}](${result.url})**`,
             result.description || "",
-            `${result.date ? `Added: ${result.date}` : ""}${result.category ? ` · ${result.category}` : ""}`,
-            `→ ${result.url}`,
+            `${result.date ? `${result.date}` : ""}${result.category ? ` · ${result.category}` : ""}`,
+            result.screenshot_url ? `[View screenshot](${result.screenshot_url})` : "",
         ].filter(Boolean).join("\n");
         content.push({ type: "text", text: lines });
     });
@@ -68,28 +52,28 @@ function createServer() {
         "search_inspiration",
         "Search curated real one-page websites and landing pages by overall design style, industry, or company type. Use for queries about complete page designs — e.g. 'dark SaaS landing page', 'minimal portfolio', 'fintech startup'. Do NOT use for specific page sections (hero, pricing, nav etc.) — use search_sections for those.",
         { query: z.string().describe("What to search for. Include style descriptors in the query for better results. Examples: 'dark SaaS landing page', 'minimal portfolio', 'fintech', 'photography'") },
-        async ({ query }) => ({ content: await formatResults(await searchOPL(query, "inspiration")) })
+        async ({ query }) => ({ content: formatResults(await searchOPL(query, "inspiration")) })
     );
 
     server.tool(
         "search_templates",
         "Search downloadable one-page website templates. Includes Framer, Webflow, HTML, Squarespace and more. Use when the user wants a template they can download or clone.",
         { query: z.string().describe("What to search for. Examples: 'Framer portfolio', 'free landing page', 'dark HTML template'") },
-        async ({ query }) => ({ content: await formatResults(await searchOPL(query, "templates")) })
+        async ({ query }) => ({ content: formatResults(await searchOPL(query, "templates")) })
     );
 
     server.tool(
         "search_sections",
         "Search real-world examples of specific page sections and UI components. ALWAYS use this tool when the query mentions a section type: hero, pricing, pricing table, CTA, call to action, navigation, sticky nav, testimonials, footer, contact form, features, about, FAQ, team. Include style descriptors in the query (e.g. 'dark pricing table', 'minimal hero section').",
         { query: z.string().describe("Section type plus any style descriptors. Examples: 'dark pricing table', 'minimal hero', 'sticky nav', 'testimonials with avatars', 'animated CTA'") },
-        async ({ query }) => ({ content: await formatResults(await searchOPL(query, "sections")) })
+        async ({ query }) => ({ content: formatResults(await searchOPL(query, "sections")) })
     );
 
     server.tool(
         "search_typefaces",
         "Search for websites using a specific typeface/font. Returns real examples of the font in use on one-page websites.",
         { query: z.string().describe("Font name to search for. Examples: 'Satoshi', 'Haffer', 'Romie', 'Geist'") },
-        async ({ query }) => ({ content: await formatResults(await searchOPL(query, "typeface")) })
+        async ({ query }) => ({ content: formatResults(await searchOPL(query, "typeface")) })
     );
 
     return server;
