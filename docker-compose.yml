@@ -1,0 +1,18 @@
+services:
+  mcp:
+    build: .
+    container_name: opl-mcp-service
+    restart: always
+    environment:
+      - PORT=3000
+      - VIRTUAL_HOST=mcp.onepagelove.com
+      - VIRTUAL_PORT=3000
+      - CERT_NAME=video.onepagelove.com/server
+      - HTTPS_METHOD=redirect
+    networks:
+      - wordpress-sites
+
+networks:
+  wordpress-sites:
+    name: wordpress-sites
+    external: true
