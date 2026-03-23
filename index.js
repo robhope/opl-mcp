@@ -136,7 +136,7 @@ if (useHttp) {
         const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: undefined, // stateless mode
         });
-        const server = createServer(IMAGE_BASE);
+        const server = createServer();
         res.on("close", () => transport.close().catch(() => {}));
         await server.connect(transport);
         await transport.handleRequest(req, res, req.body);
