@@ -30,11 +30,11 @@ function formatResults(data) {
 
     data.results.forEach((result, i) => {
         const lines = [
+            result.screenshot_url ? `![${result.title}](${result.screenshot_url})` : "",
             `**${i + 1}. ${result.title}**`,
             result.description || "",
             `${result.date ? `Added: ${result.date}` : ""}${result.category ? ` · ${result.category}` : ""}`,
             `→ ${result.url}`,
-            result.screenshot_url ? `Screenshot: ${result.screenshot_url}` : "",
         ].filter(Boolean).join("\n");
 
         content.push({ type: "text", text: lines });
